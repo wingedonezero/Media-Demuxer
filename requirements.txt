@@ -1,0 +1,12 @@
+# Media-Demuxer Requirements
+# Core GUI Framework
+PyQt6>=6.4.0
+
+# Optional: ISO reading support (uncomment if needed)
+# pycdlib>=2.0.0
+
+# System Requirements (not pip installable):
+# - ffmpeg (with DVD support)
+# - ffprobe
+# - mkvmerge (mkvtoolnix)
+# - ccextractor (optional, for closed caption extraction)
