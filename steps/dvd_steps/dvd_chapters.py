@@ -1,6 +1,6 @@
 # remux_toolkit/tools/ffmpeg_dvd_remuxer/steps/chapters.py
 import xml.etree.ElementTree as ET
-from ..utils.helpers import run_capture # Use run_capture instead of run_stream
+from utils.helpers import run_capture # Use run_capture instead of run_stream
 
 class DVDChaptersStep:
     def __init__(self, config):

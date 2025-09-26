@@ -2,7 +2,7 @@
 import json
 import subprocess
 from pathlib import Path
-from ..utils.helpers import run_capture
+from utils.helpers import run_capture
 
 class DVDMetadataAnalysisStep:
     """Deep metadata analysis step that merges IFO and ffprobe data for accurate remuxing."""

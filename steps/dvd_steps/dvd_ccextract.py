@@ -1,5 +1,5 @@
 # remux_toolkit/tools/ffmpeg_dvd_remuxer/steps/ccextract.py
-from ..utils.helpers import run_stream
+from utils.helpers import run_stream
 
 class DVDCCExtractStep:
     def __init__(self, config):

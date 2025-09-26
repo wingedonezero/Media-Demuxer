@@ -2,7 +2,7 @@
 import struct
 import json
 from pathlib import Path
-from ..utils.helpers import run_capture
+from utils.helpers import run_capture
 
 class DVDIfoParserStep:
     """Parse IFO files directly to extract DVD metadata including PGC timing data."""

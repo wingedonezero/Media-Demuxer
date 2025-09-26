@@ -1,7 +1,7 @@
 # remux_toolkit/tools/ffmpeg_dvd_remuxer/steps/telecine_detection.py
 import re
 from pathlib import Path
-from ..utils.helpers import run_stream
+from utils.helpers import run_stream
 
 class DVDTelecineDetectionStep:
     """Detect telecined film content in interlaced video streams."""

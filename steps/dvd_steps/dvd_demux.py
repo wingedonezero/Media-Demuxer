@@ -1,7 +1,7 @@
 # remux_toolkit/tools/ffmpeg_dvd_remuxer/steps/demux.py
 import re
 from pathlib import Path
-from ..utils.helpers import run_stream, time_str_to_seconds
+from utils.helpers import run_stream, time_str_to_seconds
 
 class DVDDemuxStep:
     def __init__(self, config):

@@ -29,9 +29,9 @@ class MainWindow(QMainWindow):
         self.processing_thread = None
         self._updating_checks = False
 
+        self._init_statusbar()
         self._init_ui()
         self._init_menu()
-        self._init_statusbar()
 
     def _init_ui(self):
         """Initialize the user interface."""

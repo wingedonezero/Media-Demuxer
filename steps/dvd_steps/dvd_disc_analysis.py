@@ -1,8 +1,8 @@
 # remux_toolkit/tools/ffmpeg_dvd_remuxer/steps/disc_analysis.py
 import json
 from pathlib import Path
-from ..utils.helpers import run_capture
-from ..utils.paths import get_base_name
+from utils.helpers import run_capture
+from utils.paths import get_base_name
 
 class DVDDiscAnalysisStep:
     """Step for analyzing DVD disc structure and titles."""

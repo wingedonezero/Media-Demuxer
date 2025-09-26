@@ -1,6 +1,6 @@
 # remux_toolkit/tools/ffmpeg_dvd_remuxer/steps/finalize.py
 from pathlib import Path
-from ..utils.helpers import run_stream
+from utils.helpers import run_stream
 
 class DVDFinalizeStep:
     def __init__(self, config):

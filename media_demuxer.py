@@ -12,9 +12,8 @@ from gui.main_window import MainWindow
 
 def main():
     """Application entry point."""
-    # Enable high DPI scaling
-    QApplication.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True)
-    QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
+    # High DPI scaling is enabled by default in PyQt6, so the
+    # AA_EnableHighDpiScaling and AA_UseHighDpiPixmaps attributes are obsolete.
 
     app = QApplication(sys.argv)
     app.setApplicationName("Media-Demuxer")
