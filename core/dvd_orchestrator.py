@@ -1,4 +1,4 @@
-# core/dvd_orchestrator.py
+# remux_toolkit/tools/ffmpeg_dvd_remuxer/core/dvd_orchestrator.py
 from pathlib import Path
 from steps.dvd_steps import (
     DVDDemuxStep, DVDCCExtractStep, DVDChaptersStep, DVDFinalizeStep,
@@ -16,17 +16,17 @@ class DVDOrchestrator:
         # Analysis step is separate since it runs during queue addition
         self.analysis_step = DVDDiscAnalysisStep(self.config)
 
-        # Processing pipeline steps (in order)
+        # Processing pipeline steps (in corrected order)
         self.steps = [
-            DVDIfoParserStep(self.config),           # Parse IFO for DVD metadata
-            DVDMetadataAnalysisStep(self.config),    # Analyze with ffprobe and merge
-            DVDTimingAnalysisStep(self.config),      # Comprehensive timing analysis
-            DVDDemuxStep(self.config),               # Extract streams
-            DVDCCExtractStep(self.config),           # Extract closed captions
-            DVDChaptersStep(self.config),            # Process chapters
-            DVDChapterNormalizationStep(self.config), # Fix chapter issues
-            DVDTelecineDetectionStep(self.config),   # Detect telecined content
-            DVDFinalizeStep(self.config),            # Mux to final MKV
+            DVDIfoParserStep(self.config),           # 1. Parse DVD structure from IFO
+            DVDMetadataAnalysisStep(self.config),    # 2. Analyze with ffprobe
+            DVDDemuxStep(self.config),               # 3. Extract streams with NAV timing
+            DVDTimingAnalysisStep(self.config),      # 4. Analyze extracted file timing
+            DVDCCExtractStep(self.config),           # 5. Extract closed captions
+            DVDChaptersStep(self.config),            # 6. Process chapters
+            DVDChapterNormalizationStep(self.config), # 7. Fix chapter issues
+            DVDTelecineDetectionStep(self.config),   # 8. Detect telecined content
+            DVDFinalizeStep(self.config),            # 9. Mux to final MKV
         ]
 
     def analyze_disc(self, path: Path, log_emitter, stop_event) -> tuple[list, str]:

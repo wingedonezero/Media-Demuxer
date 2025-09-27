@@ -1,6 +1,7 @@
-# remux_toolkit/tools/ffmpeg_dvd_remuxer/steps/finalize.py
+# remux_toolkit/tools/ffmpeg_dvd_remuxer/steps/dvd_steps/dvd_finalize.py
 from pathlib import Path
-from utils.helpers import run_stream
+from utils.helpers import run_stream, run_capture
+import json
 
 class DVDFinalizeStep:
     def __init__(self, config):
@@ -17,11 +18,50 @@ class DVDFinalizeStep:
         # Get extracted streams and metadata
         extracted_streams = context.get('extracted_streams', [])
         metadata = context.get('title_metadata', {})
-        mkv_mapping = metadata.get('mkv_mapping', {})
 
         if not extracted_streams:
             log_emitter("!! ERROR: No extracted streams found to mux.")
             return False
+
+        # Get the analyzed stream timings from timing analysis step
+        stream_timings = context.get('stream_timings', {})
+
+        # If we don't have timings from analysis step, probe now
+        if not stream_timings:
+            log_emitter("  -> Probing extracted streams for timing...")
+
+            for stream_info in extracted_streams:
+                stream_file = stream_info['file']
+                stream_idx = stream_info['index']
+                stream_meta = stream_info.get('metadata', {})
+
+                # Handle VOBSUB - probe the .idx file
+                if stream_meta.get('idx_file'):
+                    stream_file = stream_meta['idx_file']
+
+                probe_cmd = [
+                    "ffprobe", "-v", "error",
+                    "-show_entries", "format=start_time",
+                    "-print_format", "json",
+                    str(stream_file)
+                ]
+
+                rc, out = run_capture(probe_cmd)
+                if rc == 0:
+                    try:
+                        probe_data = json.loads(out)
+                        start_time = float(probe_data.get('format', {}).get('start_time', 0))
+                        stream_timings[stream_idx] = start_time
+                    except:
+                        stream_timings[stream_idx] = 0
+                else:
+                    stream_timings[stream_idx] = 0
+
+        # Find earliest stream start time
+        earliest_start = min(stream_timings.values()) if stream_timings else 0
+
+        if earliest_start != 0 or any(t != 0 for t in stream_timings.values()):
+            log_emitter(f"  -> Aligning streams (earliest starts at {earliest_start:.3f}s)")
 
         # Build mkvmerge command
         mkvmerge_cmd = ["mkvmerge", "-o", str(final_mkv), "--no-global-tags"]
@@ -39,14 +79,17 @@ class DVDFinalizeStep:
             stream_file = stream_info['file']
             stream_type = stream_info['type']
             stream_idx = stream_info['index']
-            delay_ms = stream_info.get('delay_ms', 0)
             stream_meta = stream_info.get('metadata', {})
 
-            # Get MKV options for this stream
-            mkv_params = mkv_mapping.get(stream_idx, {})
+            # Calculate the delay for this stream
+            stream_start = stream_timings.get(stream_idx, 0)
 
-            # Add delay if present (positive only, we never cut content)
-            if delay_ms and delay_ms > 0:
+            # Calculate delay relative to earliest stream
+            # Positive delay means this stream starts after the earliest
+            delay_ms = int((stream_start - earliest_start) * 1000)
+
+            # Apply the delay if needed
+            if delay_ms != 0:
                 mkvmerge_cmd.extend(["--sync", f"0:{delay_ms}"])
                 log_emitter(f"  -> Applying {delay_ms}ms delay to {stream_type} stream #{stream_idx}")
 
@@ -84,7 +127,6 @@ class DVDFinalizeStep:
             elif stream_type == 'subtitle' and self.config.get("subtitle_track_names", True):
                 track_name = stream_meta.get('track_name')
                 if not track_name and lang != 'und':
-                    # Basic subtitle name
                     track_name = self._lang_to_name(lang)
                     if stream_meta.get('forced'):
                         track_name += " [Forced]"
@@ -100,11 +142,9 @@ class DVDFinalizeStep:
                 # Field order handling
                 field_order = stream_meta.get('field_order')
                 if detected_progressive is True:
-                    # Force progressive flag for telecined content
                     mkvmerge_cmd.extend(["--field-order", "0:0"])
                     log_emitter(f"  -> Setting field order: progressive (telecine detected)")
                 elif field_order and detected_progressive is not False:
-                    # Use original field order if not forced interlaced
                     field_map = {
                         'tt': '1', 'tb': '1',  # top field first
                         'bb': '2', 'bt': '2',  # bottom field first
@@ -123,7 +163,6 @@ class DVDFinalizeStep:
                     elif aspect == "16:9":
                         display_width = int(height * 16 / 9)
                     else:
-                        # Try to parse aspect if it's like "720:480"
                         if ':' in aspect:
                             try:
                                 w, h = map(int, aspect.split(':'))
@@ -137,10 +176,16 @@ class DVDFinalizeStep:
 
             # Subtitle-specific options
             if stream_type == 'subtitle':
+                # Handle VOBSUB files
+                if stream_meta.get('idx_file'):
+                    # For VOBSUB, use the .idx file as input
+                    stream_file = stream_meta['idx_file']
+                    log_emitter(f"  -> Using VOBSUB .idx file: {stream_file.name}")
+
                 if stream_meta.get('forced'):
                     mkvmerge_cmd.extend(["--forced-display-flag", "0:yes"])
 
-            # Default track flags (first of each type is default)
+            # Default track flags
             if default_tracks[stream_type] is None:
                 mkvmerge_cmd.extend(["--default-track-flag", "0:yes"])
                 default_tracks[stream_type] = stream_idx
@@ -155,20 +200,24 @@ class DVDFinalizeStep:
         if context.get('cc_found', False):
             cc_srt = context.get('cc_srt_path')
             if cc_srt and cc_srt.exists():
-                mkvmerge_cmd.extend([
-                    "--language", "0:eng",
-                ])
+                # Calculate CC delay if needed
+                cc_delay_ms = 0
+                if earliest_start != 0:
+                    # CC is usually synced to video, so align with video stream
+                    video_stream = next((s for s in extracted_streams if s['type'] == 'video'), None)
+                    if video_stream:
+                        video_start = stream_timings.get(video_stream['index'], 0)
+                        cc_delay_ms = int((video_start - earliest_start) * 1000)
 
-                # Add track name if enabled
+                if cc_delay_ms != 0:
+                    mkvmerge_cmd.extend(["--sync", f"0:{cc_delay_ms}"])
+
+                mkvmerge_cmd.extend(["--language", "0:eng"])
+
                 if self.config.get("cc_track_names", True):
-                    mkvmerge_cmd.extend([
-                        "--track-name", "0:Closed Captions (EIA-608)",
-                    ])
+                    mkvmerge_cmd.extend(["--track-name", "0:Closed Captions (EIA-608)"])
 
-                mkvmerge_cmd.extend([
-                    "--default-track-flag", "0:no",
-                    str(cc_srt)
-                ])
+                mkvmerge_cmd.extend(["--default-track-flag", "0:no", str(cc_srt)])
                 log_emitter("  -> Adding extracted closed captions")
 
         # Add chapters if processed
@@ -191,26 +240,28 @@ class DVDFinalizeStep:
             log_emitter("!! ERROR: mkvmerge failed to create the final file.")
             return False
 
-        # Clean up extracted streams (they're now in the MKV)
+        # Clean up extracted streams
         log_emitter("  -> Cleaning up extracted streams...")
         for stream_info in extracted_streams:
             try:
+                # Clean up main file
                 stream_info['file'].unlink()
+                # Clean up VOBSUB files if present
+                if stream_meta := stream_info.get('metadata'):
+                    if idx_file := stream_meta.get('idx_file'):
+                        idx_file.unlink() if idx_file.exists() else None
+                    if sub_file := stream_meta.get('sub_file'):
+                        sub_file.unlink() if sub_file.exists() else None
             except OSError:
                 pass
 
         # Clean up metadata file unless configured to keep it
-        keep_metadata = context.get('keep_metadata_json', False)
-        if not keep_metadata:
+        if not context.get('keep_metadata_json', False):
             if meta_file := context.get('metadata_file'):
                 try:
-                    if meta_file.exists():
-                        meta_file.unlink()
-                        log_emitter("  -> Removed metadata JSON file")
+                    meta_file.unlink() if meta_file.exists() else None
                 except OSError:
                     pass
-        else:
-            log_emitter("  -> Keeping metadata JSON file for debugging")
 
         log_emitter(f"🎉 Successfully created: {final_mkv.name} ({final_mkv.stat().st_size / 1024 / 1024:.1f} MB)")
         return True
